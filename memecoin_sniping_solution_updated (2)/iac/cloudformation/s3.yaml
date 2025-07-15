@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS S3 Buckets for Memecoin Sniping Solution
+
+Parameters:
+  AWSAccountId:
+    Type: String
+    Description: AWS Account ID for unique bucket naming.
+
+Resources:
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'memecoin-sniping-config-bucket-${AWSAccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: Config
+
+  OptimizerDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'memecoin-sniping-optimizer-data-bucket-${AWSAccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveOldRawData
+            Status: Enabled
+            Prefix: raw/
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+          - Id: DeleteOldProcessedData
+            Status: Enabled
+            Prefix: processed/
+            ExpirationInDays: 365
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: OptimizerData
+
+  ModelArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'memecoin-sniping-model-artifacts-bucket-${AWSAccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: ModelArtifacts
+
+Outputs:
+  ConfigBucketName:
+    Description: Name of the S3 bucket for configurations
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigBucketName'
+
+  ConfigBucketArn:
+    Description: ARN of the S3 bucket for configurations
+    Value: !GetAtt ConfigBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigBucketArn'
+
+  OptimizerDataBucketName:
+    Description: Name of the S3 bucket for optimizer data
+    Value: !Ref OptimizerDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-OptimizerDataBucketName'
+
+  OptimizerDataBucketArn:
+    Description: ARN of the S3 bucket for optimizer data
+    Value: !GetAtt OptimizerDataBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-OptimizerDataBucketArn'
+
+  ModelArtifactsBucketName:
+    Description: Name of the S3 bucket for model artifacts
+    Value: !Ref ModelArtifactsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ModelArtifactsBucketName'
+
+  ModelArtifactsBucketArn:
+    Description: ARN of the S3 bucket for model artifacts
+    Value: !GetAtt ModelArtifactsBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ModelArtifactsBucketArn'
+
+

@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for SageMaker Model, Endpoint Configuration, and Endpoint for Memecoin Sniping Solution MLOps
+
+Parameters:
+  ModelArtifactsBucketName:
+    Type: String
+    Description: Name of the S3 bucket where ML model artifacts are stored
+  ModelName:
+    Type: String
+    Description: Name for the SageMaker Model
+  ModelDataUrl:
+    Type: String
+    Description: S3 URI of the model artifact (e.g., s3://your-bucket/model.tar.gz)
+  ExecutionRoleArn:
+    Type: String
+    Description: ARN of the IAM role SageMaker will assume to access model artifacts and perform inference
+  SageMakerImageUri:
+    Type: String
+    Description: ECR URI of the SageMaker Docker image to use for the model container
+    Default: 763104351884.dkr.ecr.us-east-1.amazonaws.com/tensorflow-training:2.15.0-cpu-py310-ubuntu20.04 # Exemplo de imagem mais específica
+
+Resources:
+  SageMakerModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      ModelName: !Ref ModelName
+      PrimaryContainer:
+        Image: !Ref SageMakerImageUri # Usando o parâmetro para a imagem
+        ModelDataUrl: !Ref ModelDataUrl
+        Environment:
+          SAGEMAKER_PROGRAM: inference.py # Assumindo um script de inferência
+          SAGEMAKER_SUBMIT_DIRECTORY: /opt/ml/model/code # Onde o código de inferência estará
+
+  SageMakerEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      EndpointConfigName: !Sub '${ModelName}-EndpointConfig'
+      ProductionVariants:
+        - ModelName: !GetAtt SageMakerModel.ModelName
+          VariantName: AllTraffic
+          InitialInstanceCount: 1
+          InstanceType: ml.m5.large # Alterado para ml.m5.large conforme o prompt original
+          InitialVariantWeight: 1
+
+  SageMakerEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointConfigName: !GetAtt SageMakerEndpointConfig.EndpointConfigName
+      EndpointName: !Sub '${ModelName}-Endpoint'
+
+Outputs:
+  SageMakerModelArn:
+    Description: ARN of the SageMaker Model
+    Value: !GetAtt SageMakerModel.Arn
+    Export:
+      Name: !Sub '${ModelName}-SageMakerModelArn'
+
+  SageMakerEndpointName:
+    Description: Name of the SageMaker Endpoint
+    Value: !GetAtt SageMakerEndpoint.EndpointName
+    Export:
+      Name: !Sub '${ModelName}-SageMakerEndpointName'
+
+  SageMakerEndpointArn:
+    Description: ARN of the SageMaker Endpoint
+    Value: !GetAtt SageMakerEndpoint.Arn
+    Export:
+      Name: !Sub '${ModelName}-SageMakerEndpointArn'
+
+

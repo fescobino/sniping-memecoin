@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for SQS Queues for Memecoin Sniping Solution
+
+Resources:
+  DiscovererQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MemecoinSnipingDiscovererQueue
+      VisibilityTimeout: 300
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DiscovererDLQ.Arn
+        maxReceiveCount: 5
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: DiscovererQueue
+
+  DiscovererDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MemecoinSnipingDiscovererDLQ
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: DiscovererDLQ
+
+  AnalyzerQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MemecoinSnipingAnalyzerQueue
+      VisibilityTimeout: 300
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt AnalyzerDLQ.Arn
+        maxReceiveCount: 5
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: AnalyzerQueue
+
+  AnalyzerDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MemecoinSnipingAnalyzerDLQ
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: AnalyzerDLQ
+
+  TraderQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MemecoinSnipingTraderQueue
+      VisibilityTimeout: 300
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt TraderDLQ.Arn
+        maxReceiveCount: 5
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: TraderQueue
+
+  TraderDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MemecoinSnipingTraderDLQ
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: TraderDLQ
+
+  # Políticas de Acesso para as Filas
+  DiscovererQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref DiscovererQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: sqs:SendMessage
+            Resource: !GetAtt DiscovererQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !ImportValue DiscovererLambdaFunctionArn
+          - Effect: Allow
+            Principal: '*'
+            Action: sqs:ReceiveMessage
+            Resource: !GetAtt DiscovererQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !ImportValue AnalyzerLambdaFunctionArn
+
+  AnalyzerQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref AnalyzerQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: sqs:SendMessage
+            Resource: !GetAtt AnalyzerQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !ImportValue AnalyzerLambdaFunctionArn
+          - Effect: Allow
+            Principal: '*'
+            Action: sqs:ReceiveMessage
+            Resource: !GetAtt AnalyzerQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !ImportValue TraderLambdaFunctionArn
+
+  TraderQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref TraderQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: sqs:SendMessage
+            Resource: !GetAtt TraderQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !ImportValue TraderLambdaFunctionArn
+          - Effect: Allow
+            Principal: '*'
+            Action: sqs:ReceiveMessage
+            Resource: !GetAtt TraderQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !ImportValue ExecutorLambdaFunctionArn
+
+Outputs:
+  DiscovererQueueUrl:
+    Description: URL of the Discoverer SQS Queue
+    Value: !Ref DiscovererQueue
+    Export:
+      Name: DiscovererQueueUrl
+
+  DiscovererQueueArn:
+    Description: ARN of the Discoverer SQS Queue
+    Value: !GetAtt DiscovererQueue.Arn
+    Export:
+      Name: DiscovererQueueArn
+
+  DiscovererQueueName:
+    Description: Name of the Discoverer SQS Queue
+    Value: !GetAtt DiscovererQueue.QueueName
+    Export:
+      Name: DiscovererQueueName
+
+  AnalyzerQueueUrl:
+    Description: URL of the Analyzer SQS Queue
+    Value: !Ref AnalyzerQueue
+    Export:
+      Name: AnalyzerQueueUrl
+
+  AnalyzerQueueArn:
+    Description: ARN of the Analyzer SQS Queue
+    Value: !GetAtt AnalyzerQueue.Arn
+    Export:
+      Name: AnalyzerQueueArn
+
+  AnalyzerQueueName:
+    Description: Name of the Analyzer SQS Queue
+    Value: !GetAtt AnalyzerQueue.QueueName
+    Export:
+      Name: AnalyzerQueueName
+
+  TraderQueueUrl:
+    Description: URL of the Trader SQS Queue
+    Value: !Ref TraderQueue
+    Export:
+      Name: TraderQueueUrl
+
+  TraderQueueArn:
+    Description: ARN of the Trader SQS Queue
+    Value: !GetAtt TraderQueue.Arn
+    Export:
+      Name: TraderQueueArn
+
+  TraderQueueName:
+    Description: Name of the Trader SQS Queue
+    Value: !GetAtt TraderQueue.QueueName
+    Export:
+      Name: TraderQueueName
+
+

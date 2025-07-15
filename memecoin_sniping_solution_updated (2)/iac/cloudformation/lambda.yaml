@@ -1,0 +1,528 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for Lambda Functions for Memecoin Sniping Solution MLOps
+
+Parameters:
+  LambdaCodeS3BucketName:
+    Type: String
+    Description: Name of the S3 bucket where Lambda code is stored
+  AWSAccountId:
+    Type: String
+    Description: AWS Account ID for IAM policies
+  AWSRegion:
+    Type: String
+    Description: AWS Region for resource ARNs
+
+Resources:
+  DiscovererLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MemecoinSnipingDiscoverer
+      Handler: discoverer.handler
+      Runtime: python3.11
+      Code:
+        S3Bucket: !Ref LambdaCodeS3BucketName
+        S3Key: discoverer.zip
+      MemorySize: 128
+      Timeout: 30
+      Role: !GetAtt DiscovererLambdaRole.Arn
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWSRegion
+          PUMPSWAP_MIGRATION_TABLE_NAME: !ImportValue PumpSwapMigrationTableArn
+          DISCOVERER_QUEUE_URL: !ImportValue DiscovererQueueUrl
+          HELIUS_API_KEY_SECRET_ARN: !ImportValue HeliusApiKeySecretArn
+          TWITTER_API_SECRETS_ARN: !ImportValue TwitterApiSecretsArn
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: DiscovererLambda
+
+  DiscovererLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MemecoinSnipingDiscovererRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SQSWriteAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !ImportValue DiscovererQueueArn
+        - PolicyName: DynamoDBWriteAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !ImportValue PumpSwapMigrationTableArn
+        - PolicyName: SecretsManagerReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !ImportValue HeliusApiKeySecretArn
+                  - !ImportValue TwitterApiSecretsArn
+
+  AnalyzerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MemecoinSnipingAnalyzer
+      Handler: analyzer.handler
+      Runtime: python3.11
+      Code:
+        S3Bucket: !Ref LambdaCodeS3BucketName
+        S3Key: analyzer.zip
+      MemorySize: 256
+      Timeout: 60
+      Role: !GetAtt AnalyzerLambdaRole.Arn
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWSRegion
+          DISCOVERER_QUEUE_URL: !ImportValue DiscovererQueueUrl
+          TRADER_QUEUE_URL: !ImportValue TraderQueueUrl
+          ANALYSIS_TABLE_NAME: !ImportValue PumpSwapAnalysisTableArn # Assuming this will be created
+          CONFIG_BUCKET_NAME: !ImportValue ConfigBucketName
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: AnalyzerLambda
+
+  AnalyzerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MemecoinSnipingAnalyzerRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SQSReadWriteAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:SendMessage
+                Resource:
+                  - !ImportValue DiscovererQueueArn
+                  - !ImportValue TraderQueueArn
+        - PolicyName: DynamoDBWriteAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWSRegion}:${AWSAccountId}:table/PumpSwapAnalysisTable' # Placeholder for Analyzer's table
+        - PolicyName: S3ReadConfigAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucketName}/*'
+
+  TraderLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MemecoinSnipingTrader
+      Handler: trader.handler
+      Runtime: python3.11
+      Code:
+        S3Bucket: !Ref LambdaCodeS3BucketName
+        S3Key: trader.zip
+      MemorySize: 512
+      Timeout: 120
+      Role: !GetAtt TraderLambdaRole.Arn
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWSRegion
+          TRADER_QUEUE_URL: !ImportValue TraderQueueUrl
+          TRADER_TABLE_NAME: !ImportValue TraderTableArn
+          OPTIMIZER_DATA_BUCKET_NAME: !ImportValue OptimizerDataBucketName
+          SOLANA_WALLET_SECRET_ARN: !ImportValue SolanaWalletSecretArn
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: TraderLambda
+
+  TraderLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MemecoinSnipingTraderRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SQSReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !ImportValue TraderQueueArn
+        - PolicyName: DynamoDBWriteAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !ImportValue TraderTableArn
+        - PolicyName: S3WriteOptimizerData
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub 'arn:aws:s3:::${OptimizerDataBucketName}/optimizer/raw/*'
+        - PolicyName: SecretsManagerReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !ImportValue SolanaWalletSecretArn
+
+  OptimizerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MemecoinSnipingOptimizer
+      Handler: optimizer.handler
+      Runtime: python3.11
+      Code:
+        S3Bucket: !Ref LambdaCodeS3BucketName
+        S3Key: optimizer.zip
+      MemorySize: 1024
+      Timeout: 300
+      Role: !GetAtt OptimizerLambdaRole.Arn
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWSRegion
+          TRADER_TABLE_NAME: !ImportValue TraderTableArn
+          OPTIMIZER_TABLE_NAME: !ImportValue OptimizerTableArn
+          OPTIMIZER_DATA_BUCKET_NAME: !ImportValue OptimizerDataBucketName
+          CONFIG_BUCKET_NAME: !ImportValue ConfigBucketName
+          SAGEMAKER_OPTIMIZER_ENDPOINT_NAME: !ImportValue SageMakerEndpointName
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: OptimizerLambda
+
+  OptimizerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MemecoinSnipingOptimizerRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBReadWriteAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !ImportValue TraderTableArn
+                  - !ImportValue OptimizerTableArn
+        - PolicyName: S3ReadWriteOptimizerData
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${OptimizerDataBucketName}/*'
+        - PolicyName: S3ReadWriteConfig
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucketName}/*'
+        - PolicyName: SageMakerInvokeEndpoint
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: !Sub 'arn:aws:sagemaker:${AWSRegion}:${AWSAccountId}:endpoint/*' # Use AccountId and Region for specific ARN
+
+  ETLProcessorLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MemecoinSnipingETLProcessor
+      Handler: etl_processor.handler
+      Runtime: python3.11
+      Code:
+        S3Bucket: !Ref LambdaCodeS3BucketName
+        S3Key: etl_processor.zip
+      MemorySize: 512
+      Timeout: 300
+      Role: !GetAtt ETLProcessorLambdaRole.Arn
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWSRegion
+          OPTIMIZER_DATA_BUCKET_NAME: !ImportValue OptimizerDataBucketName
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: ETLProcessorLambda
+
+  ETLProcessorLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MemecoinSnipingETLProcessorRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3ReadWriteOptimizerData
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub 'arn:aws:s3:::${OptimizerDataBucketName}/*'
+
+  ModelTrainerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MemecoinSnipingModelTrainer
+      Handler: model_trainer.handler
+      Runtime: python3.11
+      Code:
+        S3Bucket: !Ref LambdaCodeS3BucketName
+        S3Key: model_trainer.zip
+      MemorySize: 1536
+      Timeout: 600
+      Role: !GetAtt ModelTrainerLambdaRole.Arn
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWSRegion
+          OPTIMIZER_DATA_BUCKET_NAME: !ImportValue OptimizerDataBucketName
+          MODEL_ARTIFACTS_BUCKET_NAME: !ImportValue ModelArtifactsBucketName
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: ModelTrainerLambda
+
+  ModelTrainerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MemecoinSnipingModelTrainerRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3ReadOptimizerData
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${OptimizerDataBucketName}/processed/*'
+        - PolicyName: S3WriteModelArtifacts
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${ModelArtifactsBucketName}/*'
+
+  ModelDeployerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MemecoinSnipingModelDeployer
+      Handler: model_deployer.handler
+      Runtime: python3.11
+      Code:
+        S3Bucket: !Ref LambdaCodeS3BucketName
+        S3Key: model_deployer.zip
+      MemorySize: 512
+      Timeout: 300
+      Role: !GetAtt ModelDeployerLambdaRole.Arn
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWSRegion
+          MODEL_ARTIFACTS_BUCKET_NAME: !ImportValue ModelArtifactsBucketName
+          SAGEMAKER_ROLE_ARN: !ImportValue SageMakerExecutionRoleArn
+          SAGEMAKER_MODEL_NAME: !ImportValue SageMakerModelName
+          SAGEMAKER_ENDPOINT_CONFIG_NAME: !ImportValue SageMakerEndpointConfigName
+          SAGEMAKER_ENDPOINT_NAME: !ImportValue SageMakerEndpointName
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: ModelDeployerLambda
+
+  ModelDeployerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MemecoinSnipingModelDeployerRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3ReadModelArtifacts
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${ModelArtifactsBucketName}/*'
+        - PolicyName: SageMakerDeployAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateModel
+                  - sagemaker:CreateEndpointConfig
+                  - sagemaker:CreateEndpoint
+                  - sagemaker:UpdateEndpoint
+                  - sagemaker:DeleteModel
+                  - sagemaker:DeleteEndpointConfig
+                  - sagemaker:DeleteEndpoint
+                  - sagemaker:DescribeEndpoint
+                  - sagemaker:DescribeEndpointConfig
+                  - sagemaker:DescribeModel
+                Resource: '*'
+        - PolicyName: PassRoleToSageMaker
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !ImportValue SageMakerExecutionRoleArn
+
+Outputs:
+  DiscovererLambdaFunctionArn:
+    Description: ARN of the Discoverer Lambda Function
+    Value: !GetAtt DiscovererLambdaFunction.Arn
+    Export:
+      Name: DiscovererLambdaFunctionArn
+
+  AnalyzerLambdaFunctionArn:
+    Description: ARN of the Analyzer Lambda Function
+    Value: !GetAtt AnalyzerLambdaFunction.Arn
+    Export:
+      Name: AnalyzerLambdaFunctionArn
+
+  TraderLambdaFunctionArn:
+    Description: ARN of the Trader Lambda Function
+    Value: !GetAtt TraderLambdaFunction.Arn
+    Export:
+      Name: TraderLambdaFunctionArn
+
+  OptimizerLambdaFunctionArn:
+    Description: ARN of the Optimizer Lambda Function
+    Value: !GetAtt OptimizerLambdaFunction.Arn
+    Export:
+      Name: OptimizerLambdaFunctionArn
+
+  ETLProcessorLambdaFunctionArn:
+    Description: ARN of the ETL Processor Lambda Function
+    Value: !GetAtt ETLProcessorLambdaFunction.Arn
+    Export:
+      Name: ETLProcessorLambdaFunctionArn
+
+  ModelTrainerLambdaFunctionArn:
+    Description: ARN of the Model Trainer Lambda Function
+    Value: !GetAtt ModelTrainerLambdaFunction.Arn
+    Export:
+      Name: ModelTrainerLambdaFunctionArn
+
+  ModelDeployerLambdaFunctionArn:
+    Description: ARN of the Model Deployer Lambda Function
+    Value: !GetAtt ModelDeployerLambdaFunction.Arn
+    Export:
+      Name: ModelDeployerLambdaFunctionArn
+
+

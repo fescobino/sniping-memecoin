@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for DynamoDB Tables for Memecoin Sniping Solution
+
+Resources:
+  TraderTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: MemecoinSnipingTraderTable
+      AttributeDefinitions:
+        - AttributeName: tradeId
+          AttributeType: S
+        - AttributeName: entry_time
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tradeId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      GlobalSecondaryIndexes:
+        - IndexName: EntryTimeStatusIndex
+          KeySchema:
+            - AttributeName: entry_time
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 1
+            WriteCapacityUnits: 1
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: TraderTable
+
+  OptimizerTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: MemecoinSnipingOptimizerTable
+      AttributeDefinitions:
+        - AttributeName: optimizationId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: optimizationId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      GlobalSecondaryIndexes:
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 1
+            WriteCapacityUnits: 1
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: OptimizerTable
+
+  PumpSwapMigrationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: PumpSwapMigrationTable
+      AttributeDefinitions:
+        - AttributeName: token_address
+          AttributeType: S
+        - AttributeName: processed_timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: token_address
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: processed_timestamp
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: PumpSwapMigrationTable
+
+  ConcurrencyControlTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: MemecoinSnipingConcurrencyControlTable
+      AttributeDefinitions:
+        - AttributeName: resourceId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: resourceId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: ConcurrencyControlTable
+
+  SentimentCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: MemecoinSnipingSentimentCacheTable
+      AttributeDefinitions:
+        - AttributeName: queryHash
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: queryHash
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expirationTime
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: MemecoinSniping
+        - Key: Component
+          Value: SentimentCacheTable
+
+Outputs:
+  TraderTableArn:
+    Description: ARN of the Trader DynamoDB Table
+    Value: !GetAtt TraderTable.Arn
+    Export:
+      Name: TraderTableArn
+
+  OptimizerTableArn:
+    Description: ARN of the Optimizer DynamoDB Table
+    Value: !GetAtt OptimizerTable.Arn
+    Export:
+      Name: OptimizerTableArn
+
+  PumpSwapMigrationTableArn:
+    Description: ARN of the PumpSwap Migration DynamoDB Table
+    Value: !GetAtt PumpSwapMigrationTable.Arn
+    Export:
+      Name: PumpSwapMigrationTableArn
+
+  ConcurrencyControlTableArn:
+    Description: ARN of the Concurrency Control DynamoDB Table
+    Value: !GetAtt ConcurrencyControlTable.Arn
+    Export:
+      Name: ConcurrencyControlTableArn
+
+  SentimentCacheTableArn:
+    Description: ARN of the Sentiment Cache DynamoDB Table
+    Value: !GetAtt SentimentCacheTable.Arn
+    Export:
+      Name: SentimentCacheTableArn
+
+

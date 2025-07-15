@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for SNS Topic for Memecoin Sniping Solution Alerts
+
+Resources:
+  AlertSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: MemecoinSnipingAlerts
+      TopicName: MemecoinSnipingAlerts
+
+Outputs:
+  AlertSNSTopicArn:
+    Description: ARN of the SNS Topic for alerts
+    Value: !Ref AlertSNSTopic
+
+

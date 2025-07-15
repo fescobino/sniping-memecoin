@@ -1,0 +1,28 @@
+
+graph TD
+    P[Pump.Fun] --> Discoverer;;
+    PS[PumpSwap] --> Discoverer;;
+    Discoverer --> Analyzer;;
+    MSM[Mitigation Strategies Manager] --> Discoverer;;
+    MSM --> Analyzer;;
+    
+    A[Dados Brutos] --> B{Agente Executor};;
+    B --> C[Dados de Trade Brutos (S3)];;
+    C --> D{Agente ETL Processor};;
+    D --> E[Dados Processados (S3)];;
+    E --> F{Agente Model Trainer};;
+    F --> G[Modelo Treinado (S3)];;
+    G --> H{Agente Model Deployer};;
+    H --> I[Endpoint de Inferência (SageMaker)];;
+    I --> J{Agente Analyzer};;
+    I --> K{Agente Optimizer};;
+    J --> L[Decisão de Trade];;
+    K --> L;
+    L --> B;
+    I --> M[Monitoramento de Modelo (CloudWatch)];;
+    M --> F;
+    M --> N[Alertas (SNS/Telegram)];;
+
+
+
+

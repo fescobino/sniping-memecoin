@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for EventBridge Rule for Memecoin Sniping Optimizer
+
+Resources:
+  DiscovererScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: MemecoinSnipingDiscovererSchedule
+      Description: Schedule rule to trigger the Discoverer Lambda function frequently.
+      ScheduleExpression: cron(0/5 * * * ? *) # A cada 5 minutos para descoberta rápida
+      State: ENABLED
+      Targets:
+        - Arn: !ImportValue DiscovererLambdaFunctionArn
+          Id: DiscovererLambdaTarget
+          Input: "{}"
+
+  DiscovererScheduleRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue DiscovererLambdaFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DiscovererScheduleRule.Arn
+
+  OptimizerScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: MemecoinSnipingOptimizerSchedule
+      Description: Schedule rule to trigger the Optimizer Lambda function daily/weekly.
+      ScheduleExpression: cron(0 0 ? * MON *) # Mantido semanalmente para otimização
+      State: ENABLED
+      Targets:
+        - Arn: !ImportValue OptimizerLambdaFunctionArn
+          Id: OptimizerLambdaTarget
+          Input: "{}"
+
+  OptimizerScheduleRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue OptimizerLambdaFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt OptimizerScheduleRule.Arn
+
+  ModelTrainerScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: MemecoinSnipingModelTrainerSchedule
+      Description: Schedule rule to trigger the Model Trainer Lambda function monthly.
+      ScheduleExpression: cron(0 0 1 * ? *) # Mantido mensalmente para treinamento
+      State: ENABLED
+      Targets:
+        - Arn: !ImportValue ModelTrainerLambdaFunctionArn
+          Id: ModelTrainerLambdaTarget
+          Input: "{}"
+
+  ModelTrainerScheduleRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue ModelTrainerLambdaFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ModelTrainerScheduleRule.Arn
+
+  ModelDeployerScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: MemecoinSnipingModelDeployerSchedule
+      Description: Schedule rule to trigger the Model Deployer Lambda function after model training.
+      ScheduleExpression: cron(30 0 1 * ? *) # Mantido mensalmente após o treinamento
+      State: ENABLED
+      Targets:
+        - Arn: !ImportValue ModelDeployerLambdaFunctionArn
+          Id: ModelDeployerLambdaTarget
+          Input: "{\"action\": \"deploy_model\"}"
+
+  ModelDeployerScheduleRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue ModelDeployerLambdaFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ModelDeployerScheduleRule.Arn
+
+

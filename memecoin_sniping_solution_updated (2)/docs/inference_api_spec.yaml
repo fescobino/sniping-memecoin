@@ -1,0 +1,77 @@
+openapi: 3.0.0
+info:
+  title: Memecoin Sniping ML Inference API
+  version: 1.0.0
+  description: API para inferência de modelos de Machine Learning utilizados na solução de sniping de memecoins.
+
+servers:
+  - url: https://{endpointId}.execute-api.{region}.amazonaws.com/prod
+    variables:
+      endpointId:
+        default: your-sagemaker-endpoint-id
+        description: O ID do endpoint do Amazon SageMaker.
+      region:
+        default: us-east-1
+        description: A região da AWS onde o endpoint está implantado.
+
+paths:
+  /predict:
+    post:
+      summary: Realiza uma predição usando o modelo de Machine Learning.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                features:
+                  type: array
+                  items:
+                    type: number
+                  description: Lista de features numéricas para a predição. Ex: [feature1, feature2, ..., featureN]
+              example:
+                features: [1.2, 3.4, 5.6, 7.8]
+      responses:
+        '200':
+          description: Predição bem-sucedida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prediction:
+                    type: number
+                    description: O resultado da predição do modelo (ex: score de qualidade, probabilidade).
+                  model_version:
+                    type: string
+                    description: Versão do modelo utilizada para a predição.
+              example:
+                prediction: 0.85
+                model_version: v1.0.0
+        '400':
+          description: Requisição inválida.
+        '500':
+          description: Erro interno do servidor.
+
+components:
+  schemas:
+    PredictionRequest:
+      type: object
+      properties:
+        features:
+          type: array
+          items:
+            type: number
+          description: Lista de features numéricas para a predição.
+    PredictionResponse:
+      type: object
+      properties:
+        prediction:
+          type: number
+          description: O resultado da predição do modelo.
+        model_version:
+          type: string
+          description: Versão do modelo utilizada para a predição.
+
+

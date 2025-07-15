@@ -1,0 +1,15 @@
+aiohttp
+boto3
+requests
+pandas
+scikit-learn
+xgboost
+joblib
+web3
+
+
+
+
+pyarrow
+fastparquet
+
