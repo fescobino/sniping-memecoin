@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memecoin Sniping Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f23;
+            color: #cccccc;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .header h1 {
+            color: #00d4aa;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .status-operational {
+            background-color: #00d4aa;
+            color: #0f0f23;
+        }
+
+        .status-degraded {
+            background-color: #ffa500;
+            color: #0f0f23;
+        }
+
+        .status-error {
+            background-color: #ff4757;
+            color: white;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            border-left: 4px solid #00d4aa;
+        }
+
+        .metric-card h3 {
+            color: #00d4aa;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        .metric-change {
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .positive {
+            color: #00d4aa;
+        }
+
+        .negative {
+            color: #ff4757;
+        }
+
+        .chart-container {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+
+        .chart-container h3 {
+            color: #00d4aa;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .trades-table {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            overflow-x: auto;
+        }
+
+        .trades-table h3 {
+            color: #00d4aa;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        th {
+            background-color: #2c2c54;
+            color: #00d4aa;
+            font-weight: bold;
+        }
+
+        tr:hover {
+            background-color: #2c2c54;
+        }
+
+        .trade-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .status-open {
+            background-color: #ffa500;
+            color: #0f0f23;
+        }
+
+        .status-closed {
+            background-color: #00d4aa;
+            color: #0f0f23;
+        }
+
+        .pnl-positive {
+            color: #00d4aa;
+            font-weight: bold;
+        }
+
+        .pnl-negative {
+            color: #ff4757;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background-color: #ff4757;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .refresh-btn {
+            background-color: #00d4aa;
+            color: #0f0f23;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 10px;
+        }
+
+        .refresh-btn:hover {
+            background-color: #00b894;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 8px 16px;
+            border: 2px solid #00d4aa;
+            background: transparent;
+            color: #00d4aa;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .mode-btn.active {
+            background-color: #00d4aa;
+            color: #0f0f23;
+        }
+
+        .mode-btn:hover {
+            background-color: #00d4aa;
+            color: #0f0f23;
+        }
+
+        .data-input-section {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+
+        .data-input-section h3 {
+            color: #00d4aa;
+            margin-bottom: 15px;
+        }
+
+        .data-input-section textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #2c2c54;
+            border: 1px solid #00d4aa;
+            color: #cccccc;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            resize: vertical;
+        }
+
+        .data-input-section button {
+            background-color: #00d4aa;
+            color: #0f0f23;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .data-input-section button:hover {
+            background-color: #00b894;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Memecoin Sniping Dashboard</h1>
+            <div id="systemStatus" class="status-indicator">Carregando...</div>
+            <button class="refresh-btn" onclick="refreshData()">🔄 Atualizar</button>
+        </div>
+
+        <div class="mode-toggle">
+            <button class="mode-btn active" onclick="setMode('all')" id="btn-all">Todos os Trades</button>
+            <button class="mode-btn" onclick="setMode('live')" id="btn-live">Live Trading</button>
+            <button class="mode-btn" onclick="setMode('paper')" id="btn-paper">Paper Trading</button>
+        </div>
+
+        <div class="metrics-grid" id="metricsGrid">
+            <!-- Métricas serão carregadas aqui -->
+        </div>
+
+        <div class="chart-container">
+            <h3>📈 Performance Cumulativa</h3>
+            <canvas id="performanceChart" width="400" height="200"></canvas>
+        </div>
+
+        <div class="trades-table">
+            <h3>📊 Trades Recentes</h3>
+            <div id="tradesContainer">
+                <div class="loading">Carregando trades...</div>
+            </div>
+        </div>
+
+        <div class="data-input-section">
+            <h3>Adicionar Dados Históricos para Treinamento</h3>
+            <textarea id="historicalDataInput" placeholder="Cole seus dados históricos aqui no formato JSON (array de objetos). Ex: [{&quot;feature1&quot;: 10, &quot;feature2&quot;: 20, &quot;target&quot;: 1}, ...]"></textarea>
+            <button onclick="uploadHistoricalData()">Enviar Dados</button>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'all';
+        let performanceChart = null;
+
+        // Inicializar dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshData();
+            setInterval(refreshData, 30000); // Atualizar a cada 30 segundos
+        });
+
+        function setMode(mode) {
+            currentMode = mode;
+            
+            // Atualizar botões
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-${mode}`).classList.add('active');
+            
+            // Recarregar dados
+            refreshData();
+        }
+
+        async function refreshData() {
+            try {
+                await Promise.all([
+                    loadSystemStatus(),
+                    loadMetrics(),
+                    loadPerformanceChart(),
+                    loadTrades()
+                ]);
+            } catch (error) {
+                console.error('Erro ao atualizar dados:', error);
+                showError('Erro ao carregar dados do dashboard');
+            }
+        }
+
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/api/trading/status');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const status = await response.json();
+                
+                const statusElement = document.getElementById('systemStatus');
+                statusElement.textContent = `Sistema: ${status.system_status.toUpperCase()}`;
+                statusElement.className = `status-indicator status-${status.system_status}`;
+            } catch (error) {
+                console.error('Erro ao carregar status:', error);
+                const statusElement = document.getElementById('systemStatus');
+                statusElement.textContent = 'Sistema: ERRO';
+                statusElement.className = 'status-indicator status-error';
+            }
+        }
+
+        async function loadMetrics() {
+            try {
+                const response = await fetch('/api/trading/metrics?days=7');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const metrics = await response.json();
+                
+                const metricsHtml = `
+                    <div class="metric-card">
+                        <h3>Total de Trades</h3>
+                        <div class="metric-value">${metrics.total_trades}</div>
+                        <div class="metric-change">
+                            Abertos: ${metrics.open_trades} | Fechados: ${metrics.closed_trades}
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Win Rate</h3>
+                        <div class="metric-value">${(metrics.win_rate * 100).toFixed(1)}%</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>P&L Total</h3>
+                        <div class="metric-value ${metrics.total_pnl >= 0 ? 'positive' : 'negative'}">
+                            $${metrics.total_pnl.toFixed(2)}
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>P&L Médio</h3>
+                        <div class="metric-value ${metrics.avg_pnl >= 0 ? 'positive' : 'negative'}">
+                            $${metrics.avg_pnl.toFixed(2)}
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Max Drawdown</h3>
+                        <div class="metric-value negative">
+                            ${(metrics.max_drawdown * 100).toFixed(1)}%
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Live vs Paper</h3>
+                        <div class="metric-value">${metrics.live_trades}/${metrics.paper_trades}</div>
+                        <div class="metric-change">Live / Paper</div>
+                    </div>
+                `;
+                
+                document.getElementById('metricsGrid').innerHTML = metricsHtml;
+            } catch (error) {
+                console.error('Erro ao carregar métricas:', error);
+                document.getElementById('metricsGrid').innerHTML = '<div class="error">Erro ao carregar métricas</div>';
+            }
+        }
+
+        async function loadPerformanceChart() {
+            try {
+                const response = await fetch('/api/trading/performance?days=30');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // Filtrar dados baseado no modo atual
+                let filteredData = data;
+                if (currentMode === 'live') {
+                    filteredData = data.filter(d => !d.is_dry_run);
+                } else if (currentMode === 'paper') {
+                    filteredData = data.filter(d => d.is_dry_run);
+                }
+                
+                const ctx = document.getElementById('performanceChart').getContext('2d');
+                
+                if (performanceChart) {
+                    performanceChart.destroy();
+                }
+                
+                performanceChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: filteredData.map(d => new Date(d.date).toLocaleDateString()),
+                        datasets: [{
+                            label: 'P&L Cumulativo',
+                            data: filteredData.map(d => d.cumulative_pnl),
+                            borderColor: '#00d4aa',
+                            backgroundColor: 'rgba(0, 212, 170, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#cccccc'
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: '#cccccc'
+                                },
+                                grid: {
+                                    color: '#333'
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    color: '#cccccc',
+                                    callback: function(value) {
+                                        return '$' + value.toFixed(2);
+                                    }
+                                },
+                                grid: {
+                                    color: '#333'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Erro ao carregar gráfico:', error);
+            }
+        }
+
+        async function loadTrades() {
+            try {
+                const response = await fetch('/api/trading/trades?limit=20');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const trades = await response.json();
+                
+                // Filtrar trades baseado no modo atual
+                let filteredTrades = trades;
+                if (currentMode === 'live') {
+                    filteredTrades = trades.filter(t => !t.is_dry_run);
+                } else if (currentMode === 'paper') {
+                    filteredTrades = trades.filter(t => t.is_dry_run);
+                }
+                
+                if (filteredTrades.length === 0) {
+                    document.getElementById('tradesContainer').innerHTML = '<div class="loading">Nenhum trade encontrado para este modo</div>';
+                    return;
+                }
+                
+                const tradesHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Token</th>
+                                <th>Status</th>
+                                <th>Entrada</th>
+                                <th>Saída</th>
+                                <th>P&L</th>
+                                <th>Score</th>
+                                <th>Modo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filteredTrades.map(trade => `
+                                <tr>
+                                    <td>${trade.token_address ? trade.token_address.substring(0, 8) + '...' : 'N/A'}</td>
+                                    <td><span class="trade-status status-${trade.status}">${trade.status}</span></td>
+                                    <td>$${(trade.entry_price || 0).toFixed(6)}</td>
+                                    <td>$${(trade.exit_price || 0).toFixed(6)}</td>
+                                    <td class="${(trade.pnl || 0) >= 0 ? 'pnl-positive' : 'pnl-negative'}">
+                                        $${(trade.pnl || 0).toFixed(2)}
+                                    </td>
+                                    <td>${(trade.quality_score || 0).toFixed(0)}</td>
+                                    <td>${trade.is_dry_run ? 'Paper' : 'Live'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('tradesContainer').innerHTML = tradesHtml;
+            } catch (error) {
+                console.error('Erro ao carregar trades:', error);
+                document.getElementById('tradesContainer').innerHTML = '<div class="error">Erro ao carregar trades</div>';
+            }
+        }
+
+        async function uploadHistoricalData() {
+            const textarea = document.getElementById('historicalDataInput');
+            const data = textarea.value;
+
+            if (!data) {
+                showError('Por favor, insira os dados históricos no campo de texto.');
+                return;
+            }
+
+            try {
+                const parsedData = JSON.parse(data);
+                if (!Array.isArray(parsedData)) {
+                    throw new Error('Os dados devem ser um array de objetos JSON.');
+                }
+
+                const response = await fetch('/api/data/upload_historical', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(parsedData)
+                });
+
+                if (response.ok) {
+                    alert('Dados históricos enviados com sucesso para treinamento!');
+                    textarea.value = ''; // Limpar o textarea
+                } else {
+                    const errorData = await response.json();
+                    showError(`Erro ao enviar dados históricos: ${errorData.error || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Erro ao processar dados históricos:', error);
+                showError(`Formato de dados inválido: ${error.message}`);
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            document.body.insertBefore(errorDiv, document.body.firstChild);
+            
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+
+

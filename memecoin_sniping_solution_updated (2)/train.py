@@ -5,8 +5,19 @@ from sklearn.metrics import accuracy_score, f1_score
 import xgboost as xgb
 import os
 import joblib
-import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
+# boto3 is opcional para rodar localmente em modo gratuito
+try:
+    import boto3
+    from botocore.exceptions import NoCredentialsError, ClientError
+except Exception:  # pragma: no cover - boto3 pode nao estar instalado
+    boto3 = None
+    class NoCredentialsError(Exception):
+        pass
+    class ClientError(Exception):
+        pass
+
+# Permite desativar o uso do S3 para treinamento 100% local
+USE_S3 = bool(int(os.environ.get("USE_S3", "0")))
 
 # Configurações do S3 (podem ser carregadas de variáveis de ambiente ou um arquivo de configuração)
 S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME", "memecoin-sniping-models")
@@ -16,6 +27,9 @@ S3_MODEL_PREFIX = os.environ.get("S3_MODEL_PREFIX", "models/")
 HISTORICAL_DATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "optimizer", "processed", "historical_data.parquet")
 
 def load_model_from_s3(bucket, key, local_path):
+    """Baixa modelo do S3 se boto3 estiver disponível e o uso estiver habilitado."""
+    if not USE_S3 or boto3 is None:
+        return None
     s3 = boto3.client("s3")
     try:
         s3.download_file(bucket, key, local_path)
@@ -35,6 +49,9 @@ def load_model_from_s3(bucket, key, local_path):
         return None
 
 def save_model_to_s3(model, bucket, key, local_path):
+    """Salva modelo no S3 se o uso estiver habilitado."""
+    if not USE_S3 or boto3 is None:
+        return False
     s3 = boto3.client("s3")
     try:
         joblib.dump(model, local_path)
@@ -122,19 +139,20 @@ def train_model(input_df, local_model_path, s3_model_key):
     existing_model = None
     existing_f1_score = -1.0 # Inicializa com um valor baixo
 
-    # Tenta carregar do S3
-    print("Tentando carregar modelo existente do S3...")
-    s3_local_temp_path = local_model_path + ".s3_temp"
-    s3_existing_model = load_model_from_s3(S3_BUCKET_NAME, s3_model_key, s3_local_temp_path)
-    if s3_existing_model:
-        try:
-            s3_existing_predictions = s3_existing_model.predict(X_val)
-            existing_f1_score = f1_score(y_val, s3_existing_predictions)
-            existing_model = s3_existing_model
-            print(f"F1-score do modelo existente no S3: {existing_f1_score}")
-        except Exception as e:
-            print(f"Erro ao avaliar modelo do S3: {e}")
-            existing_model = None # Invalida o modelo se não puder ser avaliado
+    # Tenta carregar do S3 se habilitado
+    if USE_S3:
+        print("Tentando carregar modelo existente do S3...")
+        s3_local_temp_path = local_model_path + ".s3_temp"
+        s3_existing_model = load_model_from_s3(S3_BUCKET_NAME, s3_model_key, s3_local_temp_path)
+        if s3_existing_model:
+            try:
+                s3_existing_predictions = s3_existing_model.predict(X_val)
+                existing_f1_score = f1_score(y_val, s3_existing_predictions)
+                existing_model = s3_existing_model
+                print(f"F1-score do modelo existente no S3: {existing_f1_score}")
+            except Exception as e:
+                print(f"Erro ao avaliar modelo do S3: {e}")
+                existing_model = None  # Invalida o modelo se não puder ser avaliado
 
     # Se não carregou do S3 ou se o do S3 não pôde ser avaliado, tenta carregar localmente
     if not existing_model and os.path.exists(local_model_path):
@@ -152,18 +170,22 @@ def train_model(input_df, local_model_path, s3_model_key):
 
     # Lógica de salvamento condicional
     if current_f1_score > existing_f1_score:
-        print("Novo modelo é melhor. Salvando localmente e no S3...")
+        print("Novo modelo é melhor. Salvando localmente" + (" e no S3..." if USE_S3 else "..."))
         model_output_dir = os.path.dirname(local_model_path)
         os.makedirs(model_output_dir, exist_ok=True)
         joblib.dump(best_model, local_model_path)
         print(f"Novo modelo salvo localmente em: {local_model_path}")
-        save_model_to_s3(best_model, S3_BUCKET_NAME, s3_model_key, local_model_path)
+        if USE_S3:
+            save_model_to_s3(best_model, S3_BUCKET_NAME, s3_model_key, local_model_path)
     else:
         print("Modelo existente é igual ou melhor. Não salvando o novo modelo.")
 
 if __name__ == "__main__":
     output_model_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "trained_model.joblib")
     s3_model_key = S3_MODEL_PREFIX + "trained_model.joblib"
+
+    if not USE_S3:
+        print("\u26A0\ufe0f Executando em modo local. Salvamento em S3 desativado.")
 
     # Carregar dados históricos
     historical_df = load_historical_data(HISTORICAL_DATA_PATH)
