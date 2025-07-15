@@ -19,5 +19,4 @@ class User(db.Model):
 
 
 
-REV 001
 

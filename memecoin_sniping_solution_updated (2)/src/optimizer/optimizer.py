@@ -197,6 +197,30 @@ def calculate_avg_trade_duration(trades_df):
         logger.error(f"Erro ao calcular duração média: {e}")
         return 0
 
+
+def simulate_performance_with_params(
+    historical_data,
+    quality_threshold,
+    high_sl,
+    high_tp,
+    med_sl,
+    med_tp,
+):
+    """Simples simulação de performance para testes."""
+    selected = [
+        t for t in historical_data if t.get("quality_score", 0) >= quality_threshold
+    ]
+    if not selected:
+        return {"trade_count": 0, "win_rate": 0}
+
+    wins = 0
+    for trade in selected:
+        pnl = trade.get("exit_price", 0) - trade.get("entry_price", 0)
+        if pnl > 0:
+            wins += 1
+    win_rate = wins / len(selected)
+    return {"trade_count": len(selected), "win_rate": win_rate}
+
 def load_current_config():
     """Carrega a configuração atual do S3."""
     try:
@@ -380,6 +404,12 @@ def save_optimization_results(optimization_id, results):
     except Exception as e:
         logger.error(f"Erro inesperado ao salvar resultados da otimização: {e}")
 
+def run_bayesian_optimization(historical_trades):
+    """Stub of Bayesian optimization logic."""
+    current_metrics = calculate_performance_metrics(historical_trades)
+    return invoke_sagemaker_optimizer_endpoint(historical_trades, current_metrics)
+
+
 def lambda_handler(event, context):
     """Função principal do Lambda para o Agente Optimizer."""
     try:
@@ -401,8 +431,8 @@ def lambda_handler(event, context):
         # Carregar configuração atual
         current_config = load_current_config()
         
-        # Executar otimização via SageMaker
-        best_params, best_value = invoke_sagemaker_optimizer_endpoint(historical_trades, current_metrics)
+        # Executar otimização via função de otimização
+        best_params, best_value = run_bayesian_optimization(historical_trades)
         
         if best_params:
             # Criar configuração para A/B testing

@@ -40,5 +40,4 @@ def delete_user(user_id):
 
 
 
-REV 001
 

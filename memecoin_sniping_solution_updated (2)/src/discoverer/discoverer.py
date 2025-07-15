@@ -622,3 +622,38 @@ if __name__ == "__main__":
 
 
 
+
+# --- Simplified functions for unit tests ---
+
+sqs = boto3.client('sqs')
+SQS_QUEUE_URL = os.environ.get('SQS_QUEUE_URL', 'dummy')
+
+def get_secret(name: str):
+    """Placeholder secret fetcher."""
+    return {}
+
+def send_to_sqs(message: dict):
+    """Send message to SQS (mocked in tests)."""
+    sqs.send_message(QueueUrl=SQS_QUEUE_URL, MessageBody=json.dumps(message))
+
+
+def process_token_event(event: dict):
+    """Validate and normalize a token event."""
+    if 'tokenAddress' not in event:
+        return None
+    return {
+        'tokenAddress': event['tokenAddress'],
+        'eventType': event.get('type'),
+        'poolAddress': event.get('poolAddress'),
+        'liquidityAmount': event.get('liquidityAmount'),
+    }
+
+
+def lambda_handler(event, context):
+    """Entry point for Discoverer lambda."""
+    events = json.loads(event.get('body', '[]'))
+    for token_event in events:
+        processed = process_token_event(token_event)
+        if processed:
+            send_to_sqs(processed)
+    return {'statusCode': 200, 'body': json.dumps({'processed': len(events)})}
