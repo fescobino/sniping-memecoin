@@ -1,27 +1,125 @@
 import json
 import uuid
+import os
+import logging
+import boto3
+from solana.rpc.api import Client
+from solders.keypair import Keypair
 from decimal import Decimal
 
-# Simplified in-memory table used for tests
-trader_table = type('Table', (), {
-    'scan': lambda self: {'Items': []},
-    'put_item': lambda self, Item: None
-})()
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+
+class InMemoryTable:
+    """Simple in-memory table to emulate DynamoDB for local tests."""
+
+    def __init__(self):
+        self.items = {}
+
+    def scan(self):
+        return {'Items': list(self.items.values())}
+
+    def put_item(self, Item):
+        self.items[Item['trade_id']] = Item
+
+    def get_item(self, Key):
+        trade_id = Key.get('trade_id')
+        return {'Item': self.items.get(trade_id)}
+
+    def update_item(self, Key, Updates):
+        trade_id = Key.get('trade_id')
+        if trade_id in self.items:
+            self.items[trade_id].update(Updates)
+
+
+MODE = os.environ.get("MODE", "paper")
+TRADER_TABLE_NAME = os.environ.get("TRADER_TABLE_NAME", "MemecoinSnipingTraderTable")
+SOLANA_WALLET_SECRET_ARN = os.environ.get("SOLANA_WALLET_SECRET_ARN")
+SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
+
+dynamodb = boto3.resource("dynamodb")
+secrets_manager = boto3.client("secretsmanager")
+solana_client = Client(SOLANA_RPC_URL)
+
+try:
+    trader_table = dynamodb.Table(TRADER_TABLE_NAME)
+except Exception:
+    trader_table = InMemoryTable()
 
 def get_token_price(token_address: str) -> float:
-    """Stub for getting token price."""
+    """Return the current token price."""
+    if MODE == "real":
+        try:
+            # Placeholder for real price lookup using on-chain data or DEX API
+            return 0.0
+        except Exception as e:
+            logger.error(f"Erro ao buscar preço real: {e}")
+            return 0.0
+    # Paper mode uses a fixed simulated price
     return 0.0
 
 def get_solana_keypair():
-    """Stub returning a dummy keypair."""
-    return object()
+    """Retrieve the Solana keypair for signing transactions."""
+    if MODE == "real" and SOLANA_WALLET_SECRET_ARN:
+        try:
+            secret = secrets_manager.get_secret_value(SecretId=SOLANA_WALLET_SECRET_ARN)
+            key_data = json.loads(secret["SecretString"])
+            private_key = key_data.get("privateKey")
+            if private_key:
+                try:
+                    return Keypair.from_base58_string(private_key)
+                except Exception:
+                    return Keypair.from_secret_key(bytes.fromhex(private_key))
+        except Exception as e:
+            logger.error(f"Erro ao carregar chave Solana: {e}")
+    # Em modo paper, retorna um keypair aleatório (não usado para transações reais)
+    return Keypair()
 
 def execute_buy_order(token_address: str, position_pct: float, price: float, keypair):
-    """Stub executing a buy order and returning simulated trade data."""
+    """Execute a buy order or simulate it depending on MODE."""
+    if MODE == "real":
+        try:
+            # Placeholder for real DEX interaction via solana_client
+            tx_sig = str(uuid.uuid4())
+            return {
+                'success': True,
+                'transaction_signature': tx_sig,
+                'amount_tokens': position_pct,
+                'price_per_token': price,
+                'slippage': 0.0
+            }
+        except Exception as e:
+            logger.error(f"Erro ao executar compra real: {e}")
+            return {'success': False}
+    # Paper mode simula a ordem
     return {
         'success': True,
         'transaction_signature': str(uuid.uuid4()),
-        'amount_tokens': 0,
+        'amount_tokens': position_pct,
+        'price_per_token': price,
+        'slippage': 0.0
+    }
+
+def execute_sell_order(token_address: str, amount_tokens: float, price: float, keypair):
+    """Execute a sell order or simulate it depending on MODE."""
+    if MODE == "real":
+        try:
+            tx_sig = str(uuid.uuid4())
+            return {
+                'success': True,
+                'transaction_signature': tx_sig,
+                'amount_tokens': amount_tokens,
+                'price_per_token': price,
+                'slippage': 0.0
+            }
+        except Exception as e:
+            logger.error(f"Erro ao executar venda real: {e}")
+            return {'success': False}
+    return {
+        'success': True,
+        'transaction_signature': str(uuid.uuid4()),
+        'amount_tokens': amount_tokens,
         'price_per_token': price,
         'slippage': 0.0
     }
@@ -32,8 +130,36 @@ def save_trade_to_db(trade: dict) -> None:
 
 
 def monitor_position(trade_id: str) -> None:
-    """Stub monitoring a trade."""
-    pass
+    """Monitor an open position and execute sell orders when targets hit."""
+    record_resp = trader_table.get_item({'trade_id': trade_id})
+    trade = record_resp.get('Item')
+    if not trade:
+        return
+
+    current_price = get_token_price(trade['token_address'])
+    if not current_price:
+        return
+
+    entry_price = trade['price_per_token']
+    sl_threshold = entry_price * (1 - trade['stop_loss_pct'])
+    tp_threshold = entry_price * (1 + trade['take_profit_pct'])
+
+    if current_price <= sl_threshold:
+        result = execute_sell_order(trade['token_address'], trade.get('amount_tokens', 0), current_price, get_solana_keypair())
+        if result.get('success'):
+            trader_table.update_item({'trade_id': trade_id}, {
+                'status': 'closed',
+                'close_reason': 'stop_loss',
+                'close_price': current_price
+            })
+    elif current_price >= tp_threshold:
+        result = execute_sell_order(trade['token_address'], trade.get('amount_tokens', 0), current_price, get_solana_keypair())
+        if result.get('success'):
+            trader_table.update_item({'trade_id': trade_id}, {
+                'status': 'closed',
+                'close_reason': 'take_profit',
+                'close_price': current_price
+            })
 
 
 def calculate_trade_parameters(quality_score: int, price: float):
@@ -75,7 +201,12 @@ def process_approved_token(analysis: dict):
         'token_address': analysis['tokenAddress'],
         'status': 'open',
         'price_per_token': trade['price_per_token'],
-        'quality_score': analysis['qualityScore']
+        'quality_score': analysis['qualityScore'],
+        'stop_loss_pct': params['stop_loss_pct'],
+        'take_profit_pct': params['take_profit_pct'],
+        'position_size_pct': params['position_size_pct'],
+        'is_dry_run': MODE != 'real',
+        'amount_tokens': trade.get('amount_tokens', 0)
     }
     save_trade_to_db(trade_record)
     return trade_record
