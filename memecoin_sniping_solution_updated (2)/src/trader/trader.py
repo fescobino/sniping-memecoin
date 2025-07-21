@@ -2,6 +2,7 @@ import json
 import uuid
 import os
 import logging
+import requests
 import boto3
 from solana.rpc.api import Client
 from solders.keypair import Keypair
@@ -37,6 +38,7 @@ MODE = os.environ.get("MODE", "paper")
 TRADER_TABLE_NAME = os.environ.get("TRADER_TABLE_NAME", "MemecoinSnipingTraderTable")
 SOLANA_WALLET_SECRET_ARN = os.environ.get("SOLANA_WALLET_SECRET_ARN")
 SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
+DEX_API_URL = os.environ.get("DEX_API_URL", "https://api.dexscreener.io/latest/dex/tokens")
 
 dynamodb = boto3.resource("dynamodb")
 secrets_manager = boto3.client("secretsmanager")
@@ -48,16 +50,26 @@ except Exception:
     trader_table = InMemoryTable()
 
 def get_token_price(token_address: str) -> float:
-    """Return the current token price."""
-    if MODE == "real":
-        try:
-            # Placeholder for real price lookup using on-chain data or DEX API
-            return 0.0
-        except Exception as e:
-            logger.error(f"Erro ao buscar preço real: {e}")
-            return 0.0
-    # Paper mode uses a fixed simulated price
+    """Fetch the current token price using a public DEX API."""
+    try:
+        response = requests.get(f"{DEX_API_URL}/{token_address}", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            price_str = data.get("pairs", [{}])[0].get("priceUsd")
+            if price_str:
+                return float(price_str)
+    except Exception as e:
+        logger.error(f"Erro ao buscar preço do token: {e}")
     return 0.0
+
+def is_valid_token(token_address: str) -> bool:
+    """Check if a token account exists on Solana."""
+    try:
+        resp = solana_client.get_account_info(token_address)
+        return resp.get("result", {}).get("value") is not None
+    except Exception as e:
+        logger.error(f"Erro ao validar token: {e}")
+    return False
 
 def get_solana_keypair():
     """Retrieve the Solana keypair for signing transactions."""
@@ -78,6 +90,7 @@ def get_solana_keypair():
 
 def execute_buy_order(token_address: str, position_pct: float, price: float, keypair):
     """Execute a buy order or simulate it depending on MODE."""
+    tokens_qty = float(Decimal(position_pct) / Decimal(price)) if price else 0.0
     if MODE == "real":
         try:
             # Placeholder for real DEX interaction via solana_client
@@ -85,18 +98,18 @@ def execute_buy_order(token_address: str, position_pct: float, price: float, key
             return {
                 'success': True,
                 'transaction_signature': tx_sig,
-                'amount_tokens': position_pct,
+                'amount_tokens': tokens_qty,
                 'price_per_token': price,
                 'slippage': 0.0
             }
         except Exception as e:
             logger.error(f"Erro ao executar compra real: {e}")
             return {'success': False}
-    # Paper mode simula a ordem
+    # Paper mode apenas registra a ordem, sem enviar transação real
     return {
         'success': True,
         'transaction_signature': str(uuid.uuid4()),
-        'amount_tokens': position_pct,
+        'amount_tokens': tokens_qty,
         'price_per_token': price,
         'slippage': 0.0
     }
@@ -116,6 +129,7 @@ def execute_sell_order(token_address: str, amount_tokens: float, price: float, k
         except Exception as e:
             logger.error(f"Erro ao executar venda real: {e}")
             return {'success': False}
+    # Paper mode apenas registra a venda, sem transação real
     return {
         'success': True,
         'transaction_signature': str(uuid.uuid4()),
@@ -186,6 +200,10 @@ def calculate_trade_parameters(quality_score: int, price: float):
 
 def process_approved_token(analysis: dict):
     """Process a token approved for trading."""
+    if not is_valid_token(analysis['tokenAddress']):
+        logger.error("Token invalido ou inexistente")
+        return None
+
     price = get_token_price(analysis['tokenAddress'])
     if not price:
         return None

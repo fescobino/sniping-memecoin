@@ -43,7 +43,7 @@ graph TD
 #### 3. **Trader** - Execução de Trades
 - **Função**: Executa trades automaticamente com gerenciamento de risco. Inclui melhorias na gestão de slippage e retries.
 - **Tecnologias**: Lambda, Solana Web3, DynamoDB
-- **Modos**: Paper trading (simulação) e Live trading
+- **Modos**: Paper trading (simulação com preços reais) e Live trading
 
 #### 4. **Optimizer** - Otimização Contínua
 - **Função**: Otimiza parâmetros usando dados históricos e A/B testing, utilizando o modelo implantado no SageMaker. Agora com validação de modelo antes da promoção.

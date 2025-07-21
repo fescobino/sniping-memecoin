@@ -58,10 +58,12 @@ def test_process_approved_token():
     with patch('trader.get_token_price') as mock_price, \
          patch('trader.get_solana_keypair') as mock_keypair, \
          patch('trader.execute_buy_order') as mock_buy, \
-         patch('trader.save_trade_to_db') as mock_save:
+         patch('trader.save_trade_to_db') as mock_save, \
+         patch('trader.is_valid_token') as mock_valid:
         
         # Configura os mocks
         mock_price.return_value = 0.001  # $0.001 por token
+        mock_valid.return_value = True
         mock_keypair.return_value = Mock()
         mock_buy.return_value = {
             'success': True,
@@ -165,10 +167,12 @@ def test_price_unavailable():
     """Testa o comportamento quando o preço não está disponível."""
     print("Testando comportamento com preço indisponível...")
     
-    with patch('trader.get_token_price') as mock_price:
+    with patch('trader.get_token_price') as mock_price, \
+         patch('trader.is_valid_token') as mock_valid:
         
         # Simula preço indisponível
         mock_price.return_value = 0
+        mock_valid.return_value = True
         
         analysis_data = {
             'tokenAddress': 'InvalidToken123',
@@ -182,6 +186,25 @@ def test_price_unavailable():
         
         print("✓ Teste de preço indisponível passou")
 
+def test_invalid_token():
+    """Testa o comportamento quando o token é inválido."""
+    print("Testando token inválido...")
+
+    with patch('trader.is_valid_token') as mock_valid:
+        mock_valid.return_value = False
+
+        analysis_data = {
+            'tokenAddress': 'InvalidToken123',
+            'qualityScore': 80,
+            'approved': True
+        }
+
+        result = process_approved_token(analysis_data)
+
+        assert result is None, "Resultado deveria ser None para token inválido"
+
+        print("✓ Teste de token inválido passou")
+
 if __name__ == "__main__":
     print("Executando testes do Agente Trader...\n")
     
@@ -191,6 +214,7 @@ if __name__ == "__main__":
         test_lambda_handler_sqs()
         test_lambda_handler_timer()
         test_price_unavailable()
+        test_invalid_token()
         
         print("\n✅ Todos os testes passaram!")
         
