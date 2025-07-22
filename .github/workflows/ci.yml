@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install -r "memecoin_sniping_solution_updated (2)/requirements.txt"
+          pip install -r "memecoin_sniping_solution_updated (2)/src/discoverer/requirements.txt"
+          pip install -r "memecoin_sniping_solution_updated (2)/src/analyzer/requirements.txt"
+          pip install -r "memecoin_sniping_solution_updated (2)/src/optimizer/requirements.txt"
+          pip install -r "memecoin_sniping_solution_updated (2)/dashboard/requirements.txt"
+          pip install flake8
+      - name: Run flake8
+        run: flake8 .
+        working-directory: "memecoin_sniping_solution_updated (2)"
+      - name: Run tests
+        run: pytest
+        working-directory: "memecoin_sniping_solution_updated (2)"
