@@ -6,6 +6,7 @@ import boto3
 from solana.rpc.api import Client
 from solders.keypair import Keypair
 from decimal import Decimal
+import requests
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -48,15 +49,18 @@ except Exception:
     trader_table = InMemoryTable()
 
 def get_token_price(token_address: str) -> float:
-    """Return the current token price."""
-    if MODE == "real":
-        try:
-            # Placeholder for real price lookup using on-chain data or DEX API
-            return 0.0
-        except Exception as e:
-            logger.error(f"Erro ao buscar preço real: {e}")
-            return 0.0
-    # Paper mode uses a fixed simulated price
+    """Return the current token price using a public aggregator."""
+    try:
+        # Jupiter price API does not require an API key
+        url = f"https://price.jup.ag/v4/price?ids={token_address}"
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        price = data.get("data", {}).get(token_address, {}).get("price")
+        if price is not None:
+            return float(Decimal(str(price)))
+    except Exception as e:
+        logger.error(f"Erro ao buscar preço real: {e}")
     return 0.0
 
 def get_solana_keypair():
