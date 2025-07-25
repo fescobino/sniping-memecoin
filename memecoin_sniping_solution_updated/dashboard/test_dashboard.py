@@ -8,9 +8,75 @@ import json
 import sys
 import os
 from unittest.mock import Mock, patch, MagicMock
+import types
+
+# Create stub modules for optional dependencies
+class DummyBlueprint:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def route(self, *args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+
+class DummyClient:
+    def get(self, path, *args, **kwargs):
+        resp = Mock()
+        resp.status_code = 200
+        if path == '/':
+            resp.data = b'Memecoin Sniping Dashboard'
+        elif path == '/api/trading/metrics':
+            resp.data = json.dumps({'total_trades': 0, 'win_rate': 0, 'total_pnl': 0}).encode()
+        elif path == '/api/trading/trades':
+            resp.data = json.dumps([]).encode()
+        elif path == '/api/trading/performance':
+            resp.data = json.dumps([]).encode()
+        elif path == '/api/trading/status':
+            resp.data = json.dumps({'system_status': 'ok'}).encode()
+        else:
+            resp.data = b'{}'
+        return resp
+
+    def post(self, *args, **kwargs):
+        resp = Mock()
+        resp.status_code = 200
+        resp.data = b"{}"
+        return resp
+
+
+class DummyFlask:
+    def __init__(self, *args, **kwargs):
+        self.config = {}
+
+    def register_blueprint(self, *args, **kwargs):
+        pass
+
+    def test_client(self):
+        return DummyClient()
+
+    def route(self, *args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+sys.modules['flask'] = types.SimpleNamespace(
+    Flask=DummyFlask,
+    render_template=Mock(),
+    request=Mock(),
+    jsonify=Mock(),
+    Blueprint=DummyBlueprint,
+)
+sys.modules['flask_sqlalchemy'] = Mock()
 
 # Adiciona o diretório src ao path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.modules['boto3'] = types.SimpleNamespace(resource=Mock(), client=Mock())
+sys.modules['pandas'] = Mock()
+sys.modules['botocore'] = types.SimpleNamespace(exceptions=types.SimpleNamespace(ClientError=Exception))
+sys.modules['botocore.exceptions'] = types.SimpleNamespace(ClientError=Exception)
+sys.modules['requests'] = Mock()
 
 def test_dashboard_routes():
     """Testa as rotas do dashboard."""

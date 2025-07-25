@@ -8,6 +8,21 @@ import json
 import os
 import sys
 from unittest.mock import Mock, patch, MagicMock
+import types
+
+# Create a stub boto3 module so patch works without the real dependency
+sys.modules['boto3'] = types.SimpleNamespace(client=Mock(), resource=Mock())
+solana_api = types.SimpleNamespace(Client=Mock())
+solana_rpc = types.SimpleNamespace(api=solana_api)
+sys.modules['solana'] = types.SimpleNamespace(rpc=solana_rpc)
+sys.modules['solana.rpc'] = solana_rpc
+sys.modules['solana.rpc.api'] = solana_api
+solders_keypair = types.SimpleNamespace(Keypair=Mock())
+sys.modules['solders'] = types.SimpleNamespace(keypair=solders_keypair)
+sys.modules['solders.keypair'] = solders_keypair
+sys.modules['requests'] = Mock()
+sys.modules['botocore'] = types.SimpleNamespace(exceptions=types.SimpleNamespace(ClientError=Exception, NoCredentialsError=Exception))
+sys.modules['botocore.exceptions'] = types.SimpleNamespace(ClientError=Exception, NoCredentialsError=Exception)
 from decimal import Decimal
 
 # Adiciona o diretório atual ao path para importar o módulo trader
