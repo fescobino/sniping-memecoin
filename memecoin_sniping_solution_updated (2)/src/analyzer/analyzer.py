@@ -68,9 +68,14 @@ sqs = boto3.client("sqs")
 dynamodb = boto3.resource("dynamodb")
 secrets_manager = boto3.client("secretsmanager")
 
-# Variáveis de ambiente
-TRADER_QUEUE_URL = os.environ.get("TRADER_QUEUE_URL")
-ANALYSIS_TABLE = os.environ.get("ANALYSIS_TABLE", "PumpSwapAnalysisTable")
+from common.config import load_config
+
+# Carrega configurações do arquivo JSON ou S3
+CONFIG = load_config()
+
+# Valores obtidos do arquivo de configuração
+TRADER_QUEUE_URL = CONFIG.get("analyzer", {}).get("trader_queue_url")
+ANALYSIS_TABLE = CONFIG.get("analyzer", {}).get("analysis_table", "PumpSwapAnalysisTable")
 
 @dataclass
 class PumpSwapAnalysis:
@@ -668,13 +673,13 @@ async def lambda_handler(event, context):
         
         # Verifica se TRADER_QUEUE_URL e ANALYSIS_TABLE estão definidos
         if not TRADER_QUEUE_URL:
-            logger.error("Variável de ambiente TRADER_QUEUE_URL não definida.")
+            logger.error("Configuração TRADER_QUEUE_URL não definida.")
             return {
                 "statusCode": 500,
                 "body": json.dumps({"error": "TRADER_QUEUE_URL não configurado."})
             }
         if not ANALYSIS_TABLE:
-            logger.error("Variável de ambiente ANALYSIS_TABLE não definida.")
+            logger.error("Configuração ANALYSIS_TABLE não definida.")
             return {
                 "statusCode": 500,
                 "body": json.dumps({"error": "ANALYSIS_TABLE não configurado."})
@@ -728,9 +733,7 @@ async def lambda_handler(event, context):
 if __name__ == "__main__":
     import asyncio
     
-    # Configurações de ambiente para teste local
-    os.environ["TRADER_QUEUE_URL"] = "YOUR_LOCAL_TRADER_QUEUE_URL" # Substitua pela URL da sua fila SQS local ou mock
-    os.environ["ANALYSIS_TABLE"] = "PumpSwapAnalysisTable" # Substitua pelo nome da sua tabela DynamoDB local ou mock
+    # Configurações para teste local podem ser definidas em agent_config.json
     
     async def test_analyzer():
         test_token_data = {
