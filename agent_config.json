@@ -1,0 +1,20 @@
+{
+  "discoverer": {
+    "sqs_queue_url": "https://sqs.localhost.local/discoverer-queue",
+    "migration_table": "PumpSwapMigrationTable",
+    "poll_interval": 60
+  },
+  "analyzer": {
+    "trader_queue_url": "https://sqs.localhost.local/trader-queue",
+    "analysis_table": "PumpSwapAnalysisTable"
+  },
+  "trader": {
+    "mode": "paper",
+    "trader_table_name": "MemecoinSnipingTraderTable"
+  },
+  "optimizer": {
+    "config_bucket": "memecoin-sniping-config-bucket",
+    "config_key": "agent_config.json",
+    "optimizer_table_name": "MemecoinSnipingOptimizerTable"
+  }
+}
