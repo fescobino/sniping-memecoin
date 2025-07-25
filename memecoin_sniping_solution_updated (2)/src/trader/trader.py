@@ -34,10 +34,15 @@ class InMemoryTable:
             self.items[trade_id].update(Updates)
 
 
-MODE = os.environ.get("MODE", "paper")
-TRADER_TABLE_NAME = os.environ.get("TRADER_TABLE_NAME", "MemecoinSnipingTraderTable")
-SOLANA_WALLET_SECRET_ARN = os.environ.get("SOLANA_WALLET_SECRET_ARN")
-SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
+from common.config import load_config
+
+# Carrega configurações
+CONFIG = load_config()
+
+MODE = CONFIG.get("trader", {}).get("mode", "paper")
+TRADER_TABLE_NAME = CONFIG.get("trader", {}).get("trader_table_name", "MemecoinSnipingTraderTable")
+SOLANA_WALLET_SECRET_ARN = CONFIG.get("trader", {}).get("solana_wallet_secret_arn")
+SOLANA_RPC_URL = CONFIG.get("trader", {}).get("solana_rpc_url", "https://api.mainnet-beta.solana.com")
 
 dynamodb = boto3.resource("dynamodb")
 secrets_manager = boto3.client("secretsmanager")
